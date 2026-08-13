@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signal Glitch</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+canvas { display: block; }
+.gh-link {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.35);
+  color: #fff;
+  font: 13px/1 -apple-system, "Helvetica Neue", Arial, sans-serif;
+  text-decoration: none;
+  transition: background .2s;
+}
+.gh-link:hover { background: rgba(0,0,0,0.55); }
+.gh-link svg { width: 16px; height: 16px; fill: #fff; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+// ============== 自定义配置（改这里就行） ==============
+const CONFIG = {
+  text: 'TRAE',            // 显示的文字
+  bgColor: '#2a8c4a',      // 页面 & 遮罩背景色
+  blockBgColor: '#0a0a0a', // 文字区域底色
+  textColor: '#ffffff',    // 文字颜色
+  cols: 20,                // 网格列数
+  rows: 15,                // 网格行数
+  // 两层错位参数：Xr=向右 Xl=向左 Yu=向上 Yd=向下（数值越大错位越明显）
+  layers: [
+    { moveXr: 0.15, moveXl: 0.35, moveYu: 0.15, moveYd: 0.25 },
+    { moveXr: 0.40, moveXl: 0.10, moveYu: 0.03, moveYd: 0.02 },
+  ],
+};
+// ====================================================
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+document.body.style.background = CONFIG.bgColor;
+const COLS = CONFIG.cols, ROWS = CONFIG.rows;
+let squareX, squareY, blockW, blockH;
+let srcCanvas;
+
+let mouseX = -999, mouseY = -999;
+let prevMX = -999, prevMY = -999;
+
+const layers = CONFIG.layers.map(l => ({ ...l, blocks: [] }));
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const cw = canvas.width, ch = canvas.height;
+  const rectH = Math.min(cw, ch) * 0.45;
+  const rectW = rectH * 3;
+  blockH = Math.floor(rectH / ROWS);
+  blockW = Math.floor(rectW / COLS);
+  squareX = Math.floor((cw - blockW * COLS) / 2);
+  squareY = Math.floor((ch - blockH * ROWS) / 2);
+
+  srcCanvas = document.createElement('canvas');
+  srcCanvas.width = blockW * COLS;
+  srcCanvas.height = blockH * ROWS;
+  const sc = srcCanvas.getContext('2d');
+  sc.fillStyle = CONFIG.blockBgColor;
+  sc.fillRect(0, 0, srcCanvas.width, srcCanvas.height);
+  const fontSize = Math.floor(blockH * ROWS * 0.8);
+  sc.font = `900 ${fontSize}px 'Helvetica Neue', Arial, sans-serif`;
+  sc.textBaseline = 'middle';
+  sc.fillStyle = CONFIG.textColor;
+  const letters = CONFIG.text.split('');
+  const letterSpacing = fontSize * 0.15;
+  const totalTextW = letters.reduce((sum, l) => sum + sc.measureText(l).width, 0) + letterSpacing * (letters.length - 1);
+  let lx = (srcCanvas.width - totalTextW) / 2;
+  sc.textAlign = 'left';
+  letters.forEach(l => {
+    sc.fillText(l, lx, srcCanvas.height / 2);
+    lx += sc.measureText(l).width + letterSpacing;
+  });
+
+  for (const layer of layers) {
+    layer.blocks = [];
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        layer.blocks.push({
+          homeX: squareX + c * blockW,
+          homeY: squareY + r * blockH,
+          x: squareX + c * blockW,
+          y: squareY + r * blockH,
+          srcX: c * blockW,
+          srcY: r * blockH,
+        });
+      }
+    }
+  }
+}
+
+window.addEventListener('resize', resize);
+resize();
+
+canvas.addEventListener('mousemove', e => { prevMX = mouseX; prevMY = mouseY; mouseX = e.clientX; mouseY = e.clientY; });
+canvas.addEventListener('mouseleave', () => { mouseX = mouseY = -999; prevMX = prevMY = -999; });
+
+// 只有 GitHub Pages 在线预览才显示"返回 GitHub"按钮；下载到本地打开不显示
+if (location.hostname === 'seanyang24.github.io') {
+  const link = document.createElement('a');
+  link.className = 'gh-link';
+  link.href = 'https://github.com/SeanYang24/signal-glitch';
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>GitHub';
+  document.body.appendChild(link);
+}
+
+function frame() {
+  const mvx = mouseX - prevMX;
+  const mvy = mouseY - prevMY;
+  const rx = blockW * 5;
+  const ry = blockH * 3;
+
+  for (const layer of layers) {
+    for (const b of layer.blocks) {
+      const bcx = b.homeX + blockW / 2;
+      const bcy = b.homeY + blockH / 2;
+      const dx = (bcx - mouseX) / rx;
+      const dy = (bcy - mouseY) / ry;
+      const dist = Math.abs(dx) + Math.abs(dy);
+
+      if (dist < 1 && mouseX > 0) {
+        const strength = (1 - dist) * (1 - dist);
+        const moveX = mvx >= 0 ? layer.moveXr : layer.moveXl;
+        const moveY = mvy <= 0 ? layer.moveYu : layer.moveYd;
+        const targetX = b.homeX + mvx * blockW * moveX * strength;
+        const targetY = b.homeY - mvy * blockH * moveY * strength;
+        b.x += (targetX - b.x) * 0.2;
+        b.y += (targetY - b.y) * 0.2;
+      } else {
+        b.x += (b.homeX - b.x) * 0.08;
+        b.y += (b.homeY - b.y) * 0.08;
+      }
+    }
+  }
+
+  ctx.fillStyle = CONFIG.bgColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = CONFIG.blockBgColor;
+  ctx.fillRect(squareX, squareY, blockW * COLS, blockH * ROWS);
+
+  for (const layer of layers) {
+    for (const b of layer.blocks) {
+      ctx.drawImage(srcCanvas, b.srcX, b.srcY, blockW, blockH, Math.round(b.x), Math.round(b.y), blockW, blockH);
+    }
+  }
+
+  // 背景色遮罩：只露出文字区域
+  const mx = squareX, my = squareY, mw = blockW * COLS, mh = blockH * ROWS;
+  ctx.fillStyle = CONFIG.bgColor;
+  ctx.fillRect(0, 0, canvas.width, my);
+  ctx.fillRect(0, my + mh, canvas.width, canvas.height);
+  ctx.fillRect(0, my, mx, mh);
+  ctx.fillRect(mx + mw, my, canvas.width, mh);
+
+  requestAnimationFrame(frame);
+}
+
+frame();
+</script>
+</body>
+</html>
